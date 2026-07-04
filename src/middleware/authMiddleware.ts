@@ -1,5 +1,5 @@
 import type { Request, Response, NextFunction } from 'express';
-import { verifyToken } from '../auth.js';
+import { verifyToken } from '../auth';
 import User from "../models/users";
 
 export interface AuthedRequest extends Request {

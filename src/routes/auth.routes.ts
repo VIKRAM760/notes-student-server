@@ -29,7 +29,7 @@ function toPublicUser(userId: string, courseId: string, name: string, email: str
 }
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/auth/login', async (req, res) => {
   const { userId, password } = req.body ?? {};
 
   if (!userId || !password) {

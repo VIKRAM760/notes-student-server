@@ -1,7 +1,7 @@
 [
   {
-    "userId": "user1",
-    "name": "Ava (Frontend)",
+    "userId": "rahul12",
+    "name": "rahul (Frontend)",
     "email": "user1@example.com",
     "passwordHash": "$2a$10$g.dQBYocpniuG/JyPdbtSOpk7mV5yC6LmfRn7B3Hw3WhNFDQ8nXbK",
     "courseId": "frontend-development",
@@ -12,7 +12,7 @@
   },
   {
     "userId": "user2",
-    "name": "Liam (Backend)",
+    "name": "anjali (Backend)",
     "email": "user2@example.com",
     "passwordHash": "$2a$10$vi6tL809IBRYStXZXsUUTuvXD8I8kW5zsasbE02dCB5JgRBexIoOK",
     "courseId": "backend-development",
@@ -33,9 +33,9 @@
     "resetTokenExpiresAt": null
   },
   {
-    "userId": "admin",
-    "name": "Admin (Full-Stack)",
-    "email": "admin@example.com",
+    "userId": "vikram",
+    "name": "vikram (Full-Stack)",
+    "email": "vikrambhosale219@gmail.com",
     "passwordHash": "$2a$10$yiuvBpHVeufDjL0PCGNSSuhi8H2V95.V.AWNZjyqZPixeREDD7.pC",
     "courseId": "fullstack-development",
     "activeSessionId": null,

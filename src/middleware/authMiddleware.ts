@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../auth.js';
-import { db } from '../db.js';
+import db from "../models/users";
 
 export interface AuthedRequest extends Request {
   auth?: { userId: string; sessionId: string };

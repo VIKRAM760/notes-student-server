@@ -1,27 +1,63 @@
-import bcrypt from 'bcryptjs';
-import { db } from './db.js';
-import type { StoredUser } from './types.js';
+import User from "./models/users.js";
 
-const demoUsers: Array<Pick<StoredUser, 'userId' | 'name' | 'email' | 'courseId'> & { password: string }> = [
-  { userId: 'user1', name: 'Ava (Frontend)', email: 'user1@example.com', courseId: 'frontend-development', password: 'Frontend@123' },
-  { userId: 'user2', name: 'Liam (Backend)', email: 'user2@example.com', courseId: 'backend-development', password: 'Backend@123' },
-  { userId: 'user3', name: 'Noah (Tools)', email: 'user3@example.com', courseId: 'tools-devops', password: 'Tools@123' },
-  { userId: 'admin', name: 'Admin (Full-Stack)', email: 'admin@example.com', courseId: 'fullstack-development', password: 'Admin@123' },
-];
+export async function seedUsers() {
+  const count = await User.countDocuments();
 
-const seed: StoredUser[] = demoUsers.map((u) => ({
-  userId: u.userId,
-  name: u.name,
-  email: u.email,
-  passwordHash: bcrypt.hashSync(u.password, 10),
-  courseId: u.courseId,
-  activeSessionId: null,
-  sessionExpiresAt: null,
-  resetTokenHash: null,
-  resetTokenExpiresAt: null,
-}));
+  if (count > 0) {
+    console.log("✅ Users already exist. Skipping seed.");
+    return;
+  }
 
-db.seedIfEmpty(seed);
+  await User.insertMany([
+    {
+      userId: "rahul12",
+      name: "rahul (Frontend)",
+      email: "user1@example.com",
+      passwordHash:
+        "$2a$10$g.dQBYocpniuG/JyPdbtSOpk7mV5yC6LmfRn7B3Hw3WhNFDQ8nXbK",
+      courseId: "frontend-development",
+      activeSessionId: null,
+      sessionExpiresAt: null,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+    },
+    {
+      userId: "anjali",
+      name: "anjali (Backend)",
+      email: "user2@example.com",
+      passwordHash:
+        "$2a$10$vi6tL809IBRYStXZXsUUTuvXD8I8kW5zsasbE02dCB5JgRBexIoOK",
+      courseId: "backend-development",
+      activeSessionId: null,
+      sessionExpiresAt: null,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+    },
+    {
+      userId: "user3",
+      name: "Noah (Tools)",
+      email: "user3@example.com",
+      passwordHash:
+        "$2a$10$2DneH5dSB4z84ZJx62Vl8efKRMYO6WQn28noBaAPheTPNFQtKskBa",
+      courseId: "tools-devops",
+      activeSessionId: null,
+      sessionExpiresAt: null,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+    },
+    {
+      userId: "vikram",
+      name: "vikram (Full-Stack)",
+      email: "vikrambhosale219@gmail.com",
+      passwordHash:
+        "$2a$10$yiuvBpHVeufDjL0PCGNSSuhi8H2V95.V.AWNZjyqZPixeREDD7.pC",
+      courseId: "fullstack-development",
+      activeSessionId: null,
+      sessionExpiresAt: null,
+      resetTokenHash: null,
+      resetTokenExpiresAt: null,
+    },
+  ]);
 
-console.log('Seeded demo accounts (userId / password):');
-demoUsers.forEach((u) => console.log(`  ${u.userId} / ${u.password}  ->  ${u.courseId}`));
+  console.log("✅ Initial users inserted into MongoDB");
+}

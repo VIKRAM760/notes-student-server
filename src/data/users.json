@@ -11,7 +11,7 @@
     "resetTokenExpiresAt": null
   },
   {
-    "userId": "user2",
+    "userId": "anjali",
     "name": "anjali (Backend)",
     "email": "user2@example.com",
     "passwordHash": "$2a$10$vi6tL809IBRYStXZXsUUTuvXD8I8kW5zsasbE02dCB5JgRBexIoOK",

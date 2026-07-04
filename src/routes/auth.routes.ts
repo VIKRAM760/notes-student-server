@@ -14,10 +14,17 @@ import { requireAuth, type AuthedRequest } from '../middleware/authMiddleware.js
 import type { PublicUser } from '../types.js';
 
 const router = Router();
+
 const RESET_MINUTES = Number(process.env.RESET_TOKEN_MINUTES || 30);
 
-function toPublicUser(userId: string, courseId: string, name: string, email: string): PublicUser {
+function toPublicUser(
+  userId: string,
+  courseId: string,
+  name: string,
+  email: string
+): PublicUser {
   const course = getCourseById(courseId);
+
   return {
     userId,
     name,
@@ -28,123 +35,178 @@ function toPublicUser(userId: string, courseId: string, name: string, email: str
   };
 }
 
-// POST /api/auth/login
-router.post('/auth/login', async (req, res) => {
+/**
+ * POST /api/auth/login
+ */
+router.post('/login', async (req, res) => {
   const { userId, password } = req.body ?? {};
 
   if (!userId || !password) {
-    return res.status(400).json({ error: 'User ID and password are required.' });
+    return res.status(400).json({
+      error: 'User ID and password are required.',
+    });
   }
 
   const user = db.findByUserId(String(userId).trim());
+
   if (!user) {
-    return res.status(401).json({ error: 'Invalid user ID or password.' });
+    return res.status(401).json({
+      error: 'Invalid user ID or password.',
+    });
   }
 
-  const passwordOk = await bcrypt.compare(String(password), user.passwordHash);
+  const passwordOk = await bcrypt.compare(
+    String(password),
+    user.passwordHash
+  );
+
   if (!passwordOk) {
-    return res.status(401).json({ error: 'Invalid user ID or password.' });
+    return res.status(401).json({
+      error: 'Invalid user ID or password.',
+    });
   }
 
-  // --- single active session enforcement ---
   const hasActiveSession =
-    user.activeSessionId && user.sessionExpiresAt && user.sessionExpiresAt > Date.now();
+    user.activeSessionId &&
+    user.sessionExpiresAt &&
+    user.sessionExpiresAt > Date.now();
 
   if (hasActiveSession) {
     return res.status(409).json({
-      error: `"${user.userId}" is already logged in on another device or browser. Log out there first, or wait for that session to expire.`,
+      error: `"${user.userId}" is already logged in.`,
       code: 'ALREADY_LOGGED_IN',
     });
   }
 
   const sessionId = newSessionId();
   const sessionExpiresAt = Date.now() + sessionDurationMs();
-  db.update(user.userId, { activeSessionId: sessionId, sessionExpiresAt });
 
-  const token = signToken({ userId: user.userId, sessionId });
+  db.update(user.userId, {
+    activeSessionId: sessionId,
+    sessionExpiresAt,
+  });
+
+  const token = signToken({
+    userId: user.userId,
+    sessionId,
+  });
 
   res.json({
     token,
-    user: toPublicUser(user.userId, user.courseId, user.name, user.email),
+    user: toPublicUser(
+      user.userId,
+      user.courseId,
+      user.name,
+      user.email
+    ),
   });
 });
 
-// POST /api/auth/logout
+/**
+ * POST /api/auth/logout
+ */
 router.post('/logout', requireAuth, (req: AuthedRequest, res) => {
-  if (req.auth) {
-    db.update(req.auth.userId, { activeSessionId: null, sessionExpiresAt: null });
-  }
-  res.json({ ok: true });
+  db.update(req.auth!.userId, {
+    activeSessionId: null,
+    sessionExpiresAt: null,
+  });
+
+  res.json({
+    ok: true,
+  });
 });
 
-// GET /api/auth/me
+/**
+ * GET /api/auth/me
+ */
 router.get('/me', requireAuth, (req: AuthedRequest, res) => {
   const user = db.findByUserId(req.auth!.userId);
-  if (!user) return res.status(404).json({ error: 'User not found.' });
-  res.json({ user: toPublicUser(user.userId, user.courseId, user.name, user.email) });
+
+  if (!user) {
+    return res.status(404).json({
+      error: 'User not found.',
+    });
+  }
+
+  res.json({
+    user: toPublicUser(
+      user.userId,
+      user.courseId,
+      user.name,
+      user.email
+    ),
+  });
 });
 
-// POST /api/auth/forgot-password
+/**
+ * POST /api/auth/forgot-password
+ */
 router.post('/forgot-password', async (req, res) => {
-  const { email } = req.body ?? {};
-  if (!email) return res.status(400).json({ error: 'Email is required.' });
+  const { email } = req.body;
 
-  const user = db.findByEmail(String(email).trim());
+  if (!email) {
+    return res.status(400).json({
+      error: 'Email is required.',
+    });
+  }
 
-  // Always respond the same way whether or not the email exists, so a caller
-  // can't use this endpoint to discover which emails are registered.
+  const user = db.findByEmail(email);
+
   const genericResponse = {
-    message: 'If that email is registered, a reset link has been sent.',
+    message:
+      'If that email is registered, a reset link has been sent.',
   };
 
-  if (!user) return res.json(genericResponse);
+  if (!user) {
+    return res.json(genericResponse);
+  }
 
   const rawToken = newRawResetToken();
-  const resetTokenHash = hashToken(rawToken);
-  const resetTokenExpiresAt = Date.now() + RESET_MINUTES * 60 * 1000;
 
-  db.update(user.userId, { resetTokenHash, resetTokenExpiresAt });
+  db.update(user.userId, {
+    resetTokenHash: hashToken(rawToken),
+    resetTokenExpiresAt:
+      Date.now() + RESET_MINUTES * 60 * 1000,
+  });
 
-  const base = process.env.CLIENT_RESET_URL || 'http://localhost:5173/reset-password';
-  const resetUrl = `${base}?token=${rawToken}&uid=${encodeURIComponent(user.userId)}`;
+  const base =
+    process.env.CLIENT_RESET_URL ||
+    'http://localhost:5173/reset-password';
 
-  try {
-    await sendResetEmail(user.email, resetUrl);
-  } catch (err) {
-    console.error('[forgot-password] failed to send email:', err);
-    // Still return the generic response — don't leak email delivery details.
-  }
+  const resetUrl = `${base}?token=${rawToken}&uid=${user.userId}`;
+
+  await sendResetEmail(user.email, resetUrl);
 
   res.json(genericResponse);
 });
 
-// POST /api/auth/reset-password
+/**
+ * POST /api/auth/reset-password
+ */
 router.post('/reset-password', async (req, res) => {
-  const { userId, token, newPassword } = req.body ?? {};
+  const { userId, token, newPassword } = req.body;
 
   if (!userId || !token || !newPassword) {
-    return res.status(400).json({ error: 'Missing user ID, token, or new password.' });
-  }
-  if (String(newPassword).length < 8) {
-    return res.status(400).json({ error: 'New password must be at least 8 characters.' });
-  }
-
-  const user = db.findByUserId(String(userId));
-  const tokenHash = hashToken(String(token));
-
-  const tokenValid =
-    user &&
-    user.resetTokenHash === tokenHash &&
-    user.resetTokenExpiresAt &&
-    user.resetTokenExpiresAt > Date.now();
-
-  if (!tokenValid) {
-    return res.status(400).json({ error: 'Reset link is invalid or has expired.' });
+    return res.status(400).json({
+      error: 'Missing required fields.',
+    });
   }
 
-  const passwordHash = await bcrypt.hash(String(newPassword), 10);
+  const user = db.findByUserId(userId);
 
-  // Resetting the password also kills any existing session for safety.
+  if (
+    !user ||
+    user.resetTokenHash !== hashToken(token) ||
+    !user.resetTokenExpiresAt ||
+    user.resetTokenExpiresAt < Date.now()
+  ) {
+    return res.status(400).json({
+      error: 'Invalid or expired reset token.',
+    });
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
   db.update(user.userId, {
     passwordHash,
     resetTokenHash: null,
@@ -153,7 +215,9 @@ router.post('/reset-password', async (req, res) => {
     sessionExpiresAt: null,
   });
 
-  res.json({ message: 'Password updated. You can now log in.' });
+  res.json({
+    message: 'Password updated successfully.',
+  });
 });
 
 export default router;

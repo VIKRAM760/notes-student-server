@@ -1,12 +1,12 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../auth.js';
-import db from "../models/users.js";
+import User from "../models/users";
 
 export interface AuthedRequest extends Request {
   auth?: { userId: string; sessionId: string };
 }
 
-export function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
+ export async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction) {
   const header = req.headers.authorization;
   const token = header?.startsWith('Bearer ') ? header.slice(7) : null;
 
@@ -19,7 +19,9 @@ export function requireAuth(req: AuthedRequest, res: Response, next: NextFunctio
     return res.status(401).json({ error: 'Session expired. Please log in again.' });
   }
 
-  const user = db.findByUserId(payload.userId);
+  const user = await User.findOne({
+    userId: payload.userId,
+  });
   const sessionStillValid =
     user &&
     user.activeSessionId === payload.sessionId &&

@@ -6,7 +6,8 @@ import authRoutes from './routes/auth.routes.js';
 const app = express();
 const PORT = Number(process.env.PORT || 4000);
 
-app.use(cors());
+// app.use(cors());
+app.use(cors({ origin: 'https://student.reactdevacademy.com'}));
 app.use(express.json());
 
 app.get('/api/health', (_req, res) => {

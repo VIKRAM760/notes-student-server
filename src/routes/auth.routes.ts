@@ -47,8 +47,8 @@ router.post('/login', async (req, res) => {
     });
   }
 
-  // const user = db.findByUserId(String(userId).trim());
-  const user=UserData.find((item)=>item.userId===userId)
+  const user = db.findByUserId(String(userId).trim());
+  // const user=UserData.find((item)=>item.userId===userId)
   if (!user) {
     return res.status(401).json({
       error: 'Invalid user ID or password.',

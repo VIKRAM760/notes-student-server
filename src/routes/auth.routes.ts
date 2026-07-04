@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import User from  "../models/users";
+import User from  "../models/users.js";
 import { getCourseById } from "../courses.js";
 import {
   newSessionId,

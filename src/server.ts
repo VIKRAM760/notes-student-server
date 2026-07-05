@@ -4,6 +4,7 @@ import cors from "cors";
 
 import authRoutes from "./routes/auth.routes.js";
 import { connectDB } from "./db.js";
+import { seedUsers } from "./seed.js";
 
 const app = express();
 
@@ -27,7 +28,7 @@ const PORT = Number(process.env.PORT || 4000);
 async function start() {
   try {
     await connectDB();
-
+await seedUsers();
     app.listen(PORT, () => {
       console.log(`🚀 Server running on ${PORT}`);
     });

@@ -22,18 +22,20 @@ const RESET_MINUTES = Number(process.env.RESET_TOKEN_MINUTES || 30);
 
 function toPublicUser(
   userId: string,
-  courseId: string,
+  role: "student" | "admin",
+  courseId: string | null | undefined,
   name: string,
   email: string
 ): PublicUser {
-  const course = getCourseById(courseId);
+  const course = courseId ? getCourseById(courseId) : undefined;
 
   return {
     userId,
     name,
     email,
-    courseId,
-    courseName: course?.name || courseId,
+    role,
+    courseId: courseId ?? null,
+    courseName: course?.name || null,
     topics: course?.topics || [],
   };
 }
@@ -101,6 +103,7 @@ router.post("/login", async (req, res) => {
       token,
       user: toPublicUser(
         user.userId,
+        user.role,
         user.courseId,
         user.name,
         user.email
@@ -169,6 +172,7 @@ router.get(
       return res.json({
         user: toPublicUser(
           user.userId,
+          user.role,
           user.courseId,
           user.name,
           user.email

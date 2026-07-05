@@ -24,9 +24,16 @@ const UserSchema = new mongoose.Schema(
       required: true,
     },
 
+    role: {
+      type: String,
+      enum: ["student", "admin"],
+      default: "student",
+      required: true,
+    },
+
     courseId: {
       type: String,
-      required: true,
+      default: null, // null for admin accounts
     },
 
     activeSessionId: {

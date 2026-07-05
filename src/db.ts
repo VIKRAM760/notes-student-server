@@ -1,19 +1,19 @@
 import mongoose from "mongoose";
 
-const MONGODB_URI = 'mongodb+srv://bhosalevikram760_db_user:Y3noR99iHv2HmrSf@reactdev-academy.72qlfvs.mongodb.net/';
+const MONGODB_URI = process.env.MONGODB_URI!;
 
-export async function connectDB(): Promise<void> {
+export async function connectDB() {
   try {
     if (!MONGODB_URI) {
-      throw new Error("MONGODB_URI is not defined in .env");
+      throw new Error("MONGODB_URI is missing");
     }
 
     await mongoose.connect(MONGODB_URI);
 
-    console.log("✅ MongoDB Connected Successfully");
-  } catch (error) {
-    console.error("❌ MongoDB Connection Failed");
-    console.error(error);
+    console.log("✅ MongoDB Connected");
+  } catch (err) {
+    console.error("❌ MongoDB Connection Error");
+    console.error(err);
     process.exit(1);
   }
 }

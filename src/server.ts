@@ -4,33 +4,36 @@ import cors from "cors";
 
 import authRoutes from "./routes/auth.routes.js";
 import { connectDB } from "./db.js";
-import { seedUsers } from "./seed.js";
 
 const app = express();
-const PORT = Number(process.env.PORT || 4000);
 
 app.use(cors());
 app.use(express.json());
 
-app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok" });
+app.get("/", (_req, res) => {
+  res.send("Server Running 🚀");
 });
 
-app.get('/',(_req,res)=>{
-  res.json('Connected to server')
-})
+app.get("/api/health", (_req, res) => {
+  res.json({
+    status: "ok",
+  });
+});
 
 app.use("/api/auth", authRoutes);
 
-async function startServer() {
-  await connectDB();
+const PORT = Number(process.env.PORT || 4000);
 
-  // Insert users only if collection is empty
-  await seedUsers();
+async function start() {
+  try {
+    await connectDB();
 
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
-  });
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on ${PORT}`);
+    });
+  } catch (err) {
+    console.error(err);
+  }
 }
-startServer();
-export default app;
+
+start();

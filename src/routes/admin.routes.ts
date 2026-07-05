@@ -1,6 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import User from "../models/users.js";
+import Student from "../models/student.model.js";
 import { courses, getCourseById } from "../courses.js";
 import {
   requireAuth,
@@ -27,7 +27,7 @@ router.get("/courses", (_req, res) => {
  */
 router.get("/students", async (_req, res) => {
   try {
-    const students = await User.find({ role: "student" });
+    const students = await Student.find();
 
     return res.json({
       students: students.map((u) => {
@@ -77,14 +77,14 @@ router.post("/students", async (req, res) => {
       return res.status(400).json({ error: `Unknown courseId "${courseId}".` });
     }
 
-    const existingId = await User.findOne({ userId: String(userId).trim() });
+    const existingId = await Student.findOne({ userId: String(userId).trim() });
     if (existingId) {
       return res
         .status(409)
         .json({ error: `User ID "${userId}" is already taken.` });
     }
 
-    const existingEmail = await User.findOne({ email: String(email).trim() });
+    const existingEmail = await Student.findOne({ email: String(email).trim() });
     if (existingEmail) {
       return res
         .status(409)
@@ -93,12 +93,11 @@ router.post("/students", async (req, res) => {
 
     const passwordHash = await bcrypt.hash(String(password), 10);
 
-    const student = await User.create({
+    const student = await Student.create({
       userId: String(userId).trim(),
       name: String(name).trim(),
       email: String(email).trim(),
       passwordHash,
-      role: "student",
       courseId: String(courseId),
       activeSessionId: null,
       sessionExpiresAt: null,
@@ -132,18 +131,12 @@ router.delete(
     try {
       const { userId } = req.params;
 
-      if (userId.toLowerCase() === req.auth?.userId.toLowerCase()) {
-        return res
-          .status(400)
-          .json({ error: "You can't delete your own admin account here." });
-      }
-
-      const target = await User.findOne({ userId });
-      if (!target || target.role !== "student") {
+      const target = await Student.findOne({ userId });
+      if (!target) {
         return res.status(404).json({ error: "Student not found." });
       }
 
-      await User.deleteOne({ userId });
+      await Student.deleteOne({ userId });
       return res.json({ ok: true });
     } catch (err) {
       console.error(err);

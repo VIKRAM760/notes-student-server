@@ -7,6 +7,7 @@ const SESSION_HOURS = Number(process.env.SESSION_HOURS || 12);
 export interface TokenPayload {
   userId: string;
   sessionId: string;
+  role: 'student' | 'admin';
 }
 
 export function newSessionId(): string {

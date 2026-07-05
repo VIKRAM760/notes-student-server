@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import User from  "../models/users.js";
+import Student from "../models/student.model.js";
+import Admin from "../models/admin.model.js";
 import { getCourseById } from "../courses.js";
 import {
   newSessionId,
@@ -42,6 +43,13 @@ function toPublicUser(
 
 /**
  * POST /api/auth/login
+ *
+ * Admins and students live in separate collections. We check the admin
+ * collection first:
+ *  - Admins are NEVER blocked by an existing session — they can have as
+ *    many concurrent sessions as they want, so login always succeeds on
+ *    correct credentials.
+ *  - Students are still limited to a single active session at a time.
  */
 router.post("/login", async (req, res) => {
   try {
@@ -53,11 +61,38 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      userId: String(userId).trim(),
-    });
+    const trimmedId = String(userId).trim();
 
-    if (!user) {
+    const admin = await Admin.findOne({ userId: trimmedId });
+
+    if (admin) {
+      const passwordOk = await bcrypt.compare(String(password), admin.passwordHash);
+      if (!passwordOk) {
+        return res.status(401).json({ error: "Invalid user ID or password." });
+      }
+
+      // Drop any sessions that have already expired, then add the new one.
+      // No cap on how many can be active at once.
+      const now = Date.now();
+      admin.activeSessions = admin.activeSessions.filter((s) => s.expiresAt > now);
+
+      const sessionId = newSessionId();
+      const sessionExpiresAt = now + sessionDurationMs();
+      admin.activeSessions.push({ sessionId, expiresAt: sessionExpiresAt });
+
+      await admin.save();
+
+      const token = signToken({ userId: admin.userId, sessionId, role: "admin" });
+
+      return res.json({
+        token,
+        user: toPublicUser(admin.userId, "admin", null, admin.name, admin.email),
+      });
+    }
+
+    const student = await Student.findOne({ userId: trimmedId });
+
+    if (!student) {
       return res.status(401).json({
         error: "Invalid user ID or password.",
       });
@@ -65,7 +100,7 @@ router.post("/login", async (req, res) => {
 
     const passwordOk = await bcrypt.compare(
       String(password),
-      user.passwordHash
+      student.passwordHash
     );
 
     if (!passwordOk) {
@@ -75,13 +110,13 @@ router.post("/login", async (req, res) => {
     }
 
     const hasActiveSession =
-      user.activeSessionId &&
-      user.sessionExpiresAt &&
-      user.sessionExpiresAt > Date.now();
+      student.activeSessionId &&
+      student.sessionExpiresAt &&
+      student.sessionExpiresAt > Date.now();
 
     if (hasActiveSession) {
       return res.status(409).json({
-        error: `"${user.userId}" is already logged in.`,
+        error: `"${student.userId}" is already logged in.`,
         code: "ALREADY_LOGGED_IN",
       });
     }
@@ -89,24 +124,25 @@ router.post("/login", async (req, res) => {
     const sessionId = newSessionId();
     const sessionExpiresAt = Date.now() + sessionDurationMs();
 
-    user.activeSessionId = sessionId;
-    user.sessionExpiresAt = sessionExpiresAt;
+    student.activeSessionId = sessionId;
+    student.sessionExpiresAt = sessionExpiresAt;
 
-    await user.save();
+    await student.save();
 
     const token = signToken({
-      userId: user.userId,
+      userId: student.userId,
       sessionId,
+      role: "student",
     });
 
     return res.json({
       token,
       user: toPublicUser(
-        user.userId,
-        user.role,
-        user.courseId,
-        user.name,
-        user.email
+        student.userId,
+        "student",
+        student.courseId,
+        student.name,
+        student.email
       ),
     });
   } catch (err) {
@@ -126,17 +162,18 @@ router.post(
   requireAuth,
   async (req: AuthedRequest, res) => {
     try {
-      await User.updateOne(
-        {
-          userId: req.auth!.userId,
-        },
-        {
-          $set: {
-            activeSessionId: null,
-            sessionExpiresAt: null,
-          },
-        }
-      );
+      if (req.auth!.role === "admin") {
+        // Only remove THIS session — other concurrent admin sessions stay logged in.
+        await Admin.updateOne(
+          { userId: req.auth!.userId },
+          { $pull: { activeSessions: { sessionId: req.auth!.sessionId } } }
+        );
+      } else {
+        await Student.updateOne(
+          { userId: req.auth!.userId },
+          { $set: { activeSessionId: null, sessionExpiresAt: null } }
+        );
+      }
 
       return res.json({
         ok: true,
@@ -159,11 +196,19 @@ router.get(
   requireAuth,
   async (req: AuthedRequest, res) => {
     try {
-      const user = await User.findOne({
-        userId: req.auth!.userId,
-      });
+      if (req.auth!.role === "admin") {
+        const admin = await Admin.findOne({ userId: req.auth!.userId });
+        if (!admin) {
+          return res.status(404).json({ error: "User not found." });
+        }
+        return res.json({
+          user: toPublicUser(admin.userId, "admin", null, admin.name, admin.email),
+        });
+      }
 
-      if (!user) {
+      const student = await Student.findOne({ userId: req.auth!.userId });
+
+      if (!student) {
         return res.status(404).json({
           error: "User not found.",
         });
@@ -171,11 +216,11 @@ router.get(
 
       return res.json({
         user: toPublicUser(
-          user.userId,
-          user.role,
-          user.courseId,
-          user.name,
-          user.email
+          student.userId,
+          "student",
+          student.courseId,
+          student.name,
+          student.email
         ),
       });
     } catch (err) {
@@ -201,34 +246,33 @@ router.post("/forgot-password", async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      email,
-    });
-
     const genericResponse = {
       message:
         "If that email is registered, a reset link has been sent.",
     };
 
-    if (!user) {
+    const admin = await Admin.findOne({ email });
+    const student = admin ? null : await Student.findOne({ email });
+    const account = admin || student;
+
+    if (!account) {
       return res.json(genericResponse);
     }
 
     const rawToken = newRawResetToken();
 
-    user.resetTokenHash = hashToken(rawToken);
-    user.resetTokenExpiresAt =
-      Date.now() + RESET_MINUTES * 60 * 1000;
+    account.resetTokenHash = hashToken(rawToken);
+    account.resetTokenExpiresAt = Date.now() + RESET_MINUTES * 60 * 1000;
 
-    await user.save();
+    await account.save();
 
     const base =
       process.env.CLIENT_RESET_URL ||
       "http://localhost:5173/reset-password";
 
-    const resetUrl = `${base}?token=${rawToken}&uid=${user.userId}`;
+    const resetUrl = `${base}?token=${rawToken}&uid=${account.userId}`;
 
-    await sendResetEmail(user.email, resetUrl);
+    await sendResetEmail(account.email, resetUrl);
 
     return res.json(genericResponse);
   } catch (err) {
@@ -253,33 +297,35 @@ router.post("/reset-password", async (req, res) => {
       });
     }
 
-    const user = await User.findOne({
-      userId,
-    });
+    const admin = await Admin.findOne({ userId });
+    const student = admin ? null : await Student.findOne({ userId });
+    const account = admin || student;
 
     if (
-      !user ||
-      user.resetTokenHash !== hashToken(token) ||
-      !user.resetTokenExpiresAt ||
-      user.resetTokenExpiresAt < Date.now()
+      !account ||
+      account.resetTokenHash !== hashToken(token) ||
+      !account.resetTokenExpiresAt ||
+      account.resetTokenExpiresAt < Date.now()
     ) {
       return res.status(400).json({
         error: "Invalid or expired reset token.",
       });
     }
 
-    const passwordHash = await bcrypt.hash(
-      newPassword,
-      10
-    );
+    const passwordHash = await bcrypt.hash(newPassword, 10);
 
-    user.passwordHash = passwordHash;
-    user.resetTokenHash = null;
-    user.resetTokenExpiresAt = null;
-    user.activeSessionId = null;
-    user.sessionExpiresAt = null;
+    account.passwordHash = passwordHash;
+    account.resetTokenHash = null;
+    account.resetTokenExpiresAt = null;
 
-    await user.save();
+    if (account === student) {
+      student!.activeSessionId = null;
+      student!.sessionExpiresAt = null;
+    } else {
+      admin!.activeSessions = [];
+    }
+
+    await account.save();
 
     return res.json({
       message: "Password updated successfully.",

@@ -73,8 +73,13 @@ router.post("/login", async (req, res) => {
 
       // Drop any sessions that have already expired, then add the new one.
       // No cap on how many can be active at once.
+      // NOTE: activeSessions is a Mongoose DocumentArray, not a plain array,
+      // so we mutate it in place (splice) rather than reassigning it —
+      // reassigning with a plain array/filter result doesn't satisfy the
+      // DocumentArray type.
       const now = Date.now();
-      admin.activeSessions = admin.activeSessions.filter((s) => s.expiresAt > now);
+      const stillValid = admin.activeSessions.filter((s) => s.expiresAt > now);
+      admin.activeSessions.splice(0, admin.activeSessions.length, ...stillValid);
 
       const sessionId = newSessionId();
       const sessionExpiresAt = now + sessionDurationMs();
@@ -322,7 +327,8 @@ router.post("/reset-password", async (req, res) => {
       student!.activeSessionId = null;
       student!.sessionExpiresAt = null;
     } else {
-      admin!.activeSessions = [];
+      // Clear all admin sessions in place (DocumentArray, can't reassign to []).
+      admin!.activeSessions.splice(0, admin!.activeSessions.length);
     }
 
     await account.save();
